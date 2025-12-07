@@ -29,7 +29,7 @@ jobs:
       # Connect to GKE Cluster
       - name: Connect to GKE Cluster
         run: |
-          gcloud container clusters get-credentials ecommerce --zone asia-southeast1-a
+          gcloud container clusters get-credentials microservices-cluster --zone asia-southeast1-a
 
       # Install gke-gcloud-auth-plugin
       - name: Install gke-gcloud-auth-plugin
