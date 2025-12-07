@@ -1,91 +1,58 @@
----
-version: "3"
+version: '3.8'
+
 services:
-  # MySQL Config for order service
-  mysql-order:
-    container_name: mysql-order
-    image: mysql:latest
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: order_service
-      MYSQL_USER: ibatulanand
-      MYSQL_PASSWORD: password
-    volumes:
-      - ./mysql_order:/var/lib/mysql
-    ports:
-      - "3307:3306"
-    restart: always
-
-  # MySQL Config for inventory service
-  mysql-inventory:
-    container_name: mysql-inventory
-    image: mysql:latest
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: inventory_service
-      MYSQL_USER: ibatulanand
-      MYSQL_PASSWORD: password
-    volumes:
-      - ./mysql_inventory:/var/lib/mysql
-    ports:
-      - "3308:3306"
-    restart: always
-
-  # MongoDB Config for product service
+  # MongoDB
   mongo:
-    container_name: mongo
     image: mongo:latest
-    restart: unless-stopped
+    container_name: mongo
     ports:
       - "27017:27017"
-    expose:
-      - "27017"
-    volumes:
-      - ./mongo-data:/data/db
-
-
-  # Keycloak Config (MySQL Database)
-  keycloak-mysql:
-    container_name: keycloak-mysql
-    image: mysql:latest
-    volumes:
-      - ./mysql_keycloak_data:/var/lib/mysql
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: keycloak
-      MYSQL_USER: keycloak
-      MYSQL_PASSWORD: password
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+    volumes:
+      - mongo-data:/data/db
 
-  # Keycloak Config
+  # MySQL for Order Service
+  mysql-order:
+    image: mysql:8.0
+    container_name: mysql-order
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: order_service
+      MYSQL_ROOT_PASSWORD: password
+    volumes:
+      - mysql-order-data:/var/lib/mysql
+
+  # MySQL for Inventory Service
+  mysql-inventory:
+    image: mysql:8.0
+    container_name: mysql-inventory
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_DATABASE: inventory_service
+      MYSQL_ROOT_PASSWORD: password
+    volumes:
+      - mysql-inventory-data:/var/lib/mysql
+
+  # Keycloak
   keycloak:
+    image: quay.io/keycloak/keycloak:23.0.0
     container_name: keycloak
-    image: quay.io/keycloak/keycloak:latest
-    command: [ "start-dev",
-               "--import-realm"]
-    environment:
-      DB_VENDOR: MYSQL
-      DB_ADDR: keycloak-mysql
-      DB_DATABASE: keycloak
-      DB_USER: keycloak
-      DB_PASSWORD: password
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
-
-#      KC_HOSTNAME: keycloak
-#      KC_HOSTNAME_STRICT: false
-      KC_PROXY: edge
-      KC_HTTP_ENABLED: "true"
+    command: start-dev --import-realm
     ports:
       - "8080:8080"
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
     volumes:
-      - ./realms-export/:/opt/keycloak/data/import/
-    depends_on:
-      - keycloak-mysql
+      - ./realms-export:/opt/keycloak/data/import
 
-
-  # Apache Kafka (Zookeeper) Config
+  # Zookeeper
   zookeeper:
-    image: confluentinc/cp-zookeeper:latest
+    image: confluentinc/cp-zookeeper:7.5.0
     container_name: zookeeper
     ports:
       - "2181:2181"
@@ -93,9 +60,9 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
 
-  # Apache Kafka (Broker) Config
+  # Kafka
   broker:
-    image: confluentinc/cp-kafka:latest
+    image: confluentinc/cp-kafka:7.5.0
     container_name: broker
     ports:
       - "9092:9092"
@@ -110,146 +77,113 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
 
-
-  # Zipkin Config
+  # Zipkin
   zipkin:
     image: openzipkin/zipkin
     container_name: zipkin
     ports:
       - "9411:9411"
 
-
-  # Discovery Server (Eureka Server) Config
+  # Discovery Server
   discovery-server:
-    image: ibatulanandjp/discovery-server:latest
+    image: asia-southeast1-docker.pkg.dev/${PROJECT_ID}/microservices-repo/discovery-server:latest
     container_name: discovery-server
-    pull_policy: always
     ports:
       - "8761:8761"
     environment:
-      - SERVER_PORT=8761
-      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
+      SPRING_PROFILES_ACTIVE: docker
     depends_on:
       - zipkin
 
-  # API Gateway Service Config
+  # API Gateway
   api-gateway:
-    image: ibatulanandjp/api-gateway:dev
-    build:
-      context: ./api-gateway
+    image: asia-southeast1-docker.pkg.dev/${PROJECT_ID}/microservices-repo/api-gateway:latest
     container_name: api-gateway
-    pull_policy: always
     ports:
       - "8181:8080"
-    expose:
-      - "8181"
     environment:
-      - LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY=TRACE
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
-      - SERVER_PORT=8080
-      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI=http://keycloak:8080/realms/spring-boot-microservices-realm
-      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
+      SPRING_PROFILES_ACTIVE: docker
+      LOGGING_LEVEL_ROOT: INFO
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_CLOUD_GATEWAY: TRACE
     depends_on:
-      - zipkin
       - discovery-server
       - keycloak
+      - zipkin
 
-  # Product Service Config
+  # Product Service
   product-service:
+    image: asia-southeast1-docker.pkg.dev/${PROJECT_ID}/microservices-repo/product-service:latest
     container_name: product-service
-    image: ibatulanandjp/product-service:latest
-    pull_policy: always
     environment:
-      - SPRING_DATA_MONGODB_URI=mongodb://mongo:27017/product-service
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
-      - SERVER_PORT=8080
-      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
+      SPRING_PROFILES_ACTIVE: docker
     depends_on:
       - mongo
-      - zipkin
       - discovery-server
       - api-gateway
+      - zipkin
 
-  # Order Service Config
+  # Order Service
   order-service:
+    image: asia-southeast1-docker.pkg.dev/${PROJECT_ID}/microservices-repo/order-service:latest
     container_name: order-service
-    image: ibatulanandjp/order-service:latest
-    pull_policy: always
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-order:3306/order_service?allowPublicKeyRetrieval=true&useSSL=false
-      - SPRING_DATASOURCE_USERNAME=ibatulanand
-      - SPRING_DATASOURCE_PASSWORD=password
-      - SERVER_PORT=8080
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
-      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
-      - SPRING_KAFKA_BOOTSTRAPSERVERS=broker:29092
+      SPRING_PROFILES_ACTIVE: docker
     depends_on:
       - mysql-order
       - broker
-      - zipkin
       - discovery-server
       - api-gateway
+      - zipkin
 
-  # Inventory Service Config
+  # Inventory Service
   inventory-service:
+    image: asia-southeast1-docker.pkg.dev/${PROJECT_ID}/microservices-repo/inventory-service:latest
     container_name: inventory-service
-    image: ibatulanandjp/inventory-service:latest
-    pull_policy: always
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-inventory:3306/inventory_service?allowPublicKeyRetrieval=true&useSSL=false
-      - SPRING_DATASOURCE_USERNAME=ibatulanand
-      - SPRING_DATASOURCE_PASSWORD=password
-      - SERVER_PORT=8080
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
-      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
+      SPRING_PROFILES_ACTIVE: docker
     depends_on:
       - mysql-inventory
-      - zipkin
       - discovery-server
       - api-gateway
+      - zipkin
 
-  # Notification Service Config
+  # Notification Service
   notification-service:
+    image: asia-southeast1-docker.pkg.dev/${PROJECT_ID}/microservices-repo/notification-service:latest
     container_name: notification-service
-    image: ibatulanandjp/notification-service:latest
-    pull_policy: always
     environment:
-      - SERVER_PORT=8080
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
-      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
-      - SPRING_KAFKA_BOOTSTRAP_SERVERS=broker:29092
+      SPRING_PROFILES_ACTIVE: docker
     depends_on:
       - broker
-      - zipkin
       - discovery-server
       - api-gateway
+      - zipkin
 
-  # Prometheus Config
+  # Prometheus
   prometheus:
-    container_name: prometheus
     image: prom/prometheus:latest
-    restart: always
+    container_name: prometheus
     ports:
       - "9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-    depends_on:
-      - product-service
-      - order-service
-      - inventory-service
-      - notification-service
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
 
-  # Grafana Config
+  # Grafana
   grafana:
+    image: grafana/grafana:latest
     container_name: grafana
-    image: grafana/grafana-oss:latest
-    restart: always
     ports:
       - "3000:3000"
-    links:
-      - prometheus:prometheus
-    volumes:
-      - ./grafana_data:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=password
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+volumes:
+  mongo-data:
+  mysql-order-data:
+  mysql-inventory-data:
+  grafana-data:
