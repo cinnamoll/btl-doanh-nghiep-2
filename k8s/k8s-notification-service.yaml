@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: notification-service
-          image: asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/discovery-server:latest
+          image: asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/notification-service:latest
           ports:
             - containerPort: 8080
           env:
