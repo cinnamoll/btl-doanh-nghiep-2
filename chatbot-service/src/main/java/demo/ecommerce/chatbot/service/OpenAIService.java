@@ -19,10 +19,7 @@ public class OpenAIService {
     private final Integer maxTokens;
 
     public OpenAIService() {
-
-        // ======== NHÚNG API KEY TẠI ĐÂY ========
-        String apiKey = "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";  // <== KEY CỦA BẠN
-        // ========================================
+        String apiKey = System.getenv("OPENAI_API_KEY");
 
         this.webClient = WebClient.builder()
                 .baseUrl("https://api.openai.com/v1")
