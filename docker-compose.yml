@@ -253,3 +253,14 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=password
+  chatbot-service:
+    build: ./services/chatbot-service
+    container_name: chatbot-service
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service:8761/eureka/
+    ports:
+      - "8095:8095"
+    depends_on:
+      - discovery-service
+      - config-service

@@ -1,0 +1,35 @@
+server:
+  port: 8095
+
+spring:
+  application:
+    name: chatbot-service
+
+  # Nếu sau này bạn muốn bật Spring Cloud Config thì chỉnh ở đây
+  cloud:
+    config:
+      enabled: false   # để true nếu muốn dùng config-server
+
+eureka:
+  client:
+    enabled: false     # để true nếu muốn đăng ký với discovery-server
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+openai:
+  # Lấy từ biến môi trường OPENAI_API_KEY, nếu không có thì là "changeme"
+  api-key: ${OPENAI_API_KEY:changeme}
+
+  # Có thể cấu hình thêm, khớp với OpenAIService
+  model: gpt-4o-mini
+  max-tokens: 200
+
+# (Tuỳ chọn) Actuator cho health check
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized
