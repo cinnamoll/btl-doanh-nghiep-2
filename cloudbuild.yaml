@@ -200,7 +200,6 @@ steps:
       - 'CLOUDSDK_CONTAINER_CLUSTER=microservices-cluster'
 
 options:
-  machineType: 'E2_HIGHCPU_8'
   logging: CLOUD_LOGGING_ONLY
 
 timeout: 3600s
