@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: api-gateway
-          image: asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/api-gateway:latest
+          image: asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/discovery-server:latest
           ports:
             - containerPort: 8080
           env:
