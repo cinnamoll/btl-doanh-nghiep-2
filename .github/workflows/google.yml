@@ -1,0 +1,120 @@
+name: Deploy to GKE with Public Images
+
+on:
+  push:
+    branches:
+      - main # Trigger on push to the master branch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      # Authenticate to GCP with Service Account
+      - name: Authenticate to GCP with Service Account
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      # Setup Google Cloud SDK
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: 'silicon-airlock-456802-p4'
+
+      # Connect to GKE Cluster
+      - name: Connect to GKE Cluster
+        run: |
+          gcloud container clusters get-credentials ecommerce --zone asia-southeast1-a
+
+      # Install gke-gcloud-auth-plugin
+      - name: Install gke-gcloud-auth-plugin
+        run: |
+          gcloud components install gke-gcloud-auth-plugin --quiet || true
+
+      # Build JAR for api-gateway
+      - name: Build JAR for api-gateway
+        run: |
+          cd api-gateway
+          mvn -B -DskipTests package
+          cd ..
+
+      - name: Build JAR for discovery-server
+        run: |
+          cd discovery-server
+          mvn -B -DskipTests package
+          cd ..
+
+      - name: Build JAR for product-service
+        run: |
+          cd product-service
+          mvn -B -DskipTests package
+          cd ..
+
+      - name: Build JAR for order-service
+        run: |
+          cd order-service
+          mvn -B -DskipTests package
+          cd ..
+
+      - name: Build JAR for inventory-service
+        run: |
+          cd inventory-service
+          mvn -B -DskipTests package
+          cd ..
+
+      - name: Build JAR for notification-service
+        run: |
+          cd notification-service
+          mvn -B -DskipTests package
+          cd ..
+
+        # Authenticate Docker with Google Cloud
+      - name: Authenticate Docker
+        run: gcloud auth configure-docker asia-southeast1-docker.pkg.dev
+
+      # Build and push the Docker images for all services
+      - name: Build and Push Docker Images
+        run: |
+          docker build --no-cache -t asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/api-gateway:latest ./api-gateway
+          docker build --no-cache -t asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/discovery-server:latest ./discovery-server
+          docker build --no-cache -t asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/product-service:latest ./product-service
+          docker build --no-cache -t asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/order-service:latest ./order-service
+          docker build --no-cache -t asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/inventory-service:latest ./inventory-service
+          docker build --no-cache -t asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/notification-service:latest ./notification-service
+
+          docker push asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/api-gateway:latest
+          docker push asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/discovery-server:latest
+          docker push asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/product-service:latest
+          docker push asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/order-service:latest
+          docker push asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/inventory-service:latest
+          docker push asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/notification-service:latest
+
+      # Authenticate Docker with Google Cloud
+      - name: Authenticate Docker
+        run: gcloud auth configure-docker asia-southeast1-docker.pkg.dev
+
+      # Deploy manifests to GKE
+      - name: Deploy manifests to GKE
+        run: |
+          kubectl apply -f k8s/k8s-mysql-inventory.yaml
+          kubectl apply -f k8s/k8s-mysql-order.yaml
+          kubectl apply -f k8s/k8s-keycloak.yaml
+          kubectl apply -f k8s/k8s-keycloak-mysql.yaml
+          kubectl apply -f k8s/k8s-mongo.yaml
+          kubectl apply -f k8s/k8s-api-gateway.yaml
+          kubectl rollout status deployment/api-gateway || true
+          kubectl apply -f k8s/k8s-discovery-server.yaml
+          kubectl rollout status deployment/discovery-server || true
+          kubectl apply -f k8s/k8s-product-service.yaml
+          kubectl rollout status deployment/product-service || true
+          kubectl apply -f k8s/k8s-order-service.yaml
+          kubectl rollout status deployment/order-service || true
+          kubectl apply -f k8s/k8s-inventory-service.yaml
+          kubectl rollout status deployment/inventory-service || true
+          kubectl apply -f k8s/k8s-notification-service.yaml
+          kubectl rollout status deployment/notification-service || true

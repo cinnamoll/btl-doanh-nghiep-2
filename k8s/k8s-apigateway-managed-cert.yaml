@@ -1,0 +1,7 @@
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: apigateway-certificate
+spec:
+  domains:
+    - api-gateway.ecommerce-microservices-uet.xyz
