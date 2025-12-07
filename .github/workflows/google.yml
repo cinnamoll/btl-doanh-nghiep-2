@@ -80,19 +80,19 @@ jobs:
       # Build and push the Docker images for all services
       - name: Build and Push Docker Images
         run: |
-          docker build --no-cache -t asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/api-gateway:latest ./api-gateway
-          docker build --no-cache -t asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/discovery-server:latest ./discovery-server
-          docker build --no-cache -t asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/product-service:latest ./product-service
-          docker build --no-cache -t asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/order-service:latest ./order-service
-          docker build --no-cache -t asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/inventory-service:latest ./inventory-service
-          docker build --no-cache -t asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/notification-service:latest ./notification-service
+          docker build --no-cache -t asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/api-gateway:latest ./api-gateway
+          docker build --no-cache -t asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/discovery-server:latest ./discovery-server
+          docker build --no-cache -t asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/product-service:latest ./product-service
+          docker build --no-cache -t asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/order-service:latest ./order-service
+          docker build --no-cache -t asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/inventory-service:latest ./inventory-service
+          docker build --no-cache -t asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/notification-service:latest ./notification-service
 
-          docker push asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/api-gateway:latest
-          docker push asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/discovery-server:latest
-          docker push asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/product-service:latest
-          docker push asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/order-service:latest
-          docker push asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/inventory-service:latest
-          docker push asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/notification-service:latest
+          docker push asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/api-gateway:latest
+          docker push asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/discovery-server:latest
+          docker push asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/product-service:latest
+          docker push asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/order-service:latest
+          docker push asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/inventory-service:latest
+          docker push asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/notification-service:latest
 
       # Authenticate Docker with Google Cloud
       - name: Authenticate Docker
