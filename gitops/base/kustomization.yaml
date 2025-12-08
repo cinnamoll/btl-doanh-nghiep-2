@@ -5,18 +5,18 @@ namespace: microservices
 
 resources:
   # Infrastructure
-  - mongodb-deployment.yaml
-  - mysql-order-deployment.yaml
-  - mysql-inventory-deployment.yaml
-  - keycloak-deployment.yaml
+  - k8s-mongo.yaml
+  - k8s-mysql-order.yaml
+  - k8s-mysql-inventory.yaml
+  - k8s-keycloak.yaml
 
   # Services
-  - discovery-server-deployment.yaml
-  - product-service-deployment.yaml
-  - order-service-deployment.yaml
-  - inventory-service-deployment.yaml
-  - notification-service-deployment.yaml
-  - api-gateway-deployment.yaml
+  - k8s-discovery-server.yaml
+  - k8s-product-service.yaml
+  - k8s-order-service.yaml
+  - k8s-inventory-service.yaml
+  - k8s-notification-service.yaml
+  - k8s-api-gateway.yaml
 
 commonLabels:
   app.kubernetes.io/managed-by: argocd
