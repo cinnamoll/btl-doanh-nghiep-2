@@ -1,7 +1,7 @@
 // src/components/user/ProductCard.jsx
 import { Link } from 'react-router-dom';
 import { ShoppingCart, Heart } from 'lucide-react';
-import { useCartStore } from '../../store/cartStore';
+import { useCartStore } from '../../store/cartStore.js';
 import { toast } from 'sonner';
 
 export default function ProductCard({ product }) {

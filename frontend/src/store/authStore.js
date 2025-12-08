@@ -1,37 +1,22 @@
-import axios from 'axios';
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
-const API_BASE_URL = import.meta.env.VITE_API_GATEWAY_URL;
+export const useAuthStore = create(
+    persist(
+        (set) => ({
+            user: null,
+            token: null,
+            isAuthenticated: false,
 
-const api = axios.create({
-    baseURL: API_BASE_URL,
-    headers: {
-        'Content-Type': 'application/json',
-    },
-});
-
-// Request interceptor to add auth token
-api.interceptors.request.use(
-    (config) => {
-        const token = localStorage.getItem('access_token');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+            login: (user, token) => set({ user, token, isAuthenticated: true }),
+            logout: () => {
+                localStorage.removeItem('access_token');
+                set({ user: null, token: null, isAuthenticated: false });
+            },
+            updateUser: (user) => set({ user }),
+        }),
+        {
+            name: 'auth-storage',
         }
-        return config;
-    },
-    (error) => Promise.reject(error)
+    )
 );
-
-// Response interceptor to handle errors
-api.interceptors.response.use(
-    (response) => response,
-    async (error) => {
-        if (error.response?.status === 401) {
-            // Handle token refresh or logout
-            localStorage.removeItem('access_token');
-            window.location.href = '/login';
-        }
-        return Promise.reject(error);
-    }
-);
-
-export default api;
