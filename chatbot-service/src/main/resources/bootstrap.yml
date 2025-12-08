@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: chatbot-service
+
+  cloud:
+    config:
+      enabled: false
