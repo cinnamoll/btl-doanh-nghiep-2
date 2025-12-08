@@ -1,0 +1,44 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: microservices
+
+bases:
+  - ../../base
+
+# Image overrides (sẽ update bởi CI)
+images:
+  - name: discovery-server
+    newName: asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/discovery-server
+    newTag: latest
+  - name: api-gateway
+    newName: asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/api-gateway
+    newTag: latest
+  - name: product-service
+    newName: asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/product-service
+    newTag: latest
+  - name: order-service
+    newName: asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/order-service
+    newTag: latest
+  - name: inventory-service
+    newName: asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/inventory-service
+    newTag: latest
+  - name: notification-service
+    newName: asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/notification-service
+    newTag: latest
+
+# Resource overrides
+replicas:
+  - name: discovery-server
+    count: 1
+  - name: product-service
+    count: 2
+  - name: api-gateway
+    count: 2
+
+# ConfigMap for environment-specific configs
+configMapGenerator:
+  - name: app-config
+    literals:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO

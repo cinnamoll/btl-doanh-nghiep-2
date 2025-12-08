@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: microservices
+
+resources:
+  # Infrastructure
+  - mongodb-deployment.yaml
+  - mysql-order-deployment.yaml
+  - mysql-inventory-deployment.yaml
+  - keycloak-deployment.yaml
+
+  # Services
+  - discovery-server-deployment.yaml
+  - product-service-deployment.yaml
+  - order-service-deployment.yaml
+  - inventory-service-deployment.yaml
+  - notification-service-deployment.yaml
+  - api-gateway-deployment.yaml
+
+commonLabels:
+  app.kubernetes.io/managed-by: argocd
