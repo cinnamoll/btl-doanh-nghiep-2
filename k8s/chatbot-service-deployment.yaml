@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chatbot-service
+  namespace: microservices # Bắt buộc phải có dòng này
+  labels:
+    app: chatbot-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chatbot-service
+  template:
+    metadata:
+      labels:
+        app: chatbot-service
+    spec:
+      containers:
+        - name: chatbot-service
+          # Thay YOUR_PROJECT_ID bằng ID project thật của bạn
+          image: asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/chatbot-service:latest
+          ports:
+            - containerPort: 8080
+
+          # Cấu hình biến môi trường
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "prod"
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              value: "http://discovery-server:8761/eureka/"
+          # Nếu chatbot dùng OpenAI/Gemini, hãy thêm API Key vào đây (hoặc dùng Secret cho an toàn)
+          # - name: OPENAI_API_KEY
+          #   value: "sk-..."
+
+          # Quan trọng: Giới hạn tài nguyên để không bị lỗi Quota trên GKE
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+          # Health Check (Giúp K8s biết khi nào app sẵn sàng nhận request)
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
