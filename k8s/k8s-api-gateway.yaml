@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api-gateway
+  namespace: microservices
 spec:
   replicas: 1
   selector:
@@ -14,7 +15,7 @@ spec:
     spec:
       containers:
         - name: api-gateway
-          image: asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/api-gateway:latest
+          image: asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/api-gateway:latest
           ports:
             - containerPort: 8080
           env:

@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: notification-service
+  namespace: microservices
 spec:
   replicas: 1
   selector:
@@ -14,7 +15,7 @@ spec:
     spec:
       containers:
         - name: notification-service
-          image: asia-southeast1-docker.pkg.dev/silicon-airlock-456802-p4/samples/notification-service:latest
+          image: asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/notification-service:latest
           ports:
             - containerPort: 8080
           env:

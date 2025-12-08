@@ -2,6 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: keycloak-ingress
+  namespace: microservices
   annotations:
     kubernetes.io/ingress.global-static-ip-name: keycloak-ingress-ip
     networking.gke.io/managed-certificates: keycloak-certificate
