@@ -215,10 +215,11 @@ jobs:
       - name: Sync ArgoCD Application
         run: |
           # Login to ArgoCD
+          export ARGOCD_OPTS="--insecure"
+          
           argocd login ${{ secrets.ARGOCD_SERVER }} \
             --username admin \
             --password ${{ secrets.ARGOCD_AUTH_TOKEN }} \
-            --insecure
           
           # Get current app status
           echo "Current application status:"
