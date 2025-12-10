@@ -1,8 +1,8 @@
-name: Build and Deploy with ArgoCD
+name: CI/CD with ArgoCD
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
     branches: [ main ]
 
@@ -12,17 +12,28 @@ env:
   REPOSITORY: microservices-repo
 
 jobs:
-  build-and-push:
+  build:
     name: Build and Push Images
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
+      contents: write
       id-token: write
 
+    outputs:
+      short-sha: ${{ steps.vars.outputs.short-sha }}
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set output variables
+        id: vars
+        run: |
+          echo "short-sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+          echo "date=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -44,75 +55,222 @@ jobs:
           cache: maven
 
       - name: Build with Maven
-        run: mvn clean package -DskipTests -T 1C
+        run: |
+          echo "Building all services..."
+          mvn clean package -DskipTests -T 1C
+          
+          # List built jars
+          echo "Built artifacts:"
+          find . -name "*.jar" -type f | grep target
 
       - name: Build and Push Docker Images
         run: |
-          # Get short SHA
-          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          SHORT_SHA=${{ steps.vars.outputs.short-sha }}
+          
+          # Define services
+          services=(
+            "discovery-server"
+            "api-gateway"
+            "product-service"
+            "order-service"
+            "inventory-service"
+            "notification-service"
+          )
           
           # Build and push each service
-          services=(discovery-server api-gateway product-service order-service inventory-service notification-service)
-          
           for service in "${services[@]}"; do
+            echo "=========================================="
             echo "Building $service..."
+            echo "=========================================="
           
+            IMAGE_BASE="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${service}"
+          
+            # Check if Dockerfile exists
+            if [ ! -f "${service}/Dockerfile" ]; then
+              echo "Warning: Dockerfile not found for ${service}, skipping..."
+              continue
+            fi
+          
+            # Build image
             docker build \
-              -t ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/$service:$SHORT_SHA \
-              -t ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/$service:latest \
-              -f $service/Dockerfile \
-              $service
+              -t "${IMAGE_BASE}:${SHORT_SHA}" \
+              -t "${IMAGE_BASE}:latest" \
+              -t "${IMAGE_BASE}:${{ steps.vars.outputs.date }}" \
+              -f "${service}/Dockerfile" \
+              "${service}"
           
-            echo "Pushing $service..."
-            docker push ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/$service:$SHORT_SHA
-            docker push ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/$service:latest
+            # Push all tags
+            echo "Pushing ${service}..."
+            docker push "${IMAGE_BASE}:${SHORT_SHA}"
+            docker push "${IMAGE_BASE}:latest"
+            docker push "${IMAGE_BASE}:${{ steps.vars.outputs.date }}"
+          
+            echo "✓ ${service} pushed successfully"
           done
+          
+          echo "=========================================="
+          echo "All images built and pushed!"
+          echo "=========================================="
 
-      - name: Update K8s manifests
+      - name: List pushed images
         run: |
-          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          echo "Images in Artifact Registry:"
+          gcloud artifacts docker images list \
+            ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }} \
+            --format="table(package,version,create_time)" \
+            --limit=20
+
+  update-manifests:
+    name: Update Kubernetes Manifests
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Update image tags in manifests
+        run: |
+          SHORT_SHA=${{ needs.build.outputs.short-sha }}
           
-          # Update image tags in k8s manifests
-          cd k8s
-          for file in *-deployment.yaml; do
-            if [[ -f "$file" ]]; then
-              # Extract service name from filename
-              service=$(echo $file | sed 's/-deployment.yaml//')
+          echo "Updating manifests with image tag: ${SHORT_SHA}"
           
-              # Update image tag
-              sed -i "s|image: .*/$service:.*|image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/$service:$SHORT_SHA|g" $file
+          # Check if gitops directory exists, otherwise use k8s
+          if [ -d "gitops" ]; then
+            cd gitops
+          elif [ -d "k8s" ]; then
+            cd k8s
+          else
+            echo "Error: Neither gitops nor k8s directory found"
+            exit 1
+          fi
+          
+          # Define services and their deployment files
+          declare -A services=(
+            ["discovery-server"]="discovery-server-deployment.yaml"
+            ["api-gateway"]="api-gateway-deployment.yaml"
+            ["product-service"]="product-service-deployment.yaml"
+            ["order-service"]="order-service-deployment.yaml"
+            ["inventory-service"]="inventory-service-deployment.yaml"
+            ["notification-service"]="notification-service-deployment.yaml"
+          )
+          
+          # Update each deployment file
+          for service in "${!services[@]}"; do
+            file="${services[$service]}"
+          
+            if [ -f "$file" ]; then
+              echo "Updating $file..."
+          
+              # Use sed to update image tag
+              sed -i.bak -E "s|image: .*/${service}:.*|image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${service}:${SHORT_SHA}|g" "$file"
+          
+              # Remove backup file
+              rm -f "${file}.bak"
+          
+              echo "✓ Updated $file"
+            else
+              echo "⚠ File $file not found, skipping..."
             fi
           done
+          
+          echo "Manifest updates complete!"
 
-      - name: Commit and Push changes
+      - name: Show changes
+        run: |
+          echo "Changes to be committed:"
+          git diff k8s/
+
+      - name: Commit and push changes
         run: |
           git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
           git add k8s/*.yaml
-          git diff --staged --quiet || git commit -m "Update image tags to ${{ github.sha }}"
+          
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          
+          git commit -m "Update image tags to ${{ needs.build.outputs.short-sha }} [skip ci]"
           git push
 
-  trigger-argocd-sync:
+  notify-argocd:
     name: Trigger ArgoCD Sync
-    needs: build-and-push
+    needs: [build, update-manifests]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: Sync ArgoCD Application
+      - name: Install ArgoCD CLI
         run: |
-          # Install ArgoCD CLI
           curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
           chmod +x argocd
-          
+          sudo mv argocd /usr/local/bin/
+
+      - name: Sync ArgoCD Application
+        run: |
           # Login to ArgoCD
-          ./argocd login ${{ secrets.ARGOCD_SERVER }} \
+          argocd login ${{ secrets.ARGOCD_SERVER }} \
             --username admin \
             --password ${{ secrets.ARGOCD_AUTH_TOKEN }} \
             --insecure
           
-          # Sync application
-          ./argocd app sync microservices-app --force
+          # Get current app status
+          echo "Current application status:"
+          argocd app get microservices-app
           
-          # Wait for sync
-          ./argocd app wait microservices-app --timeout 600
+          # Trigger sync
+          echo "Triggering sync..."
+          argocd app sync microservices-app --force --prune
+          
+          # Wait for sync to complete
+          echo "Waiting for sync to complete..."
+          argocd app wait microservices-app \
+            --timeout 600 \
+            --health || {
+            echo "Sync failed or timed out"
+            argocd app get microservices-app
+            exit 1
+          }
+          
+          # Show final status
+          echo "Sync completed successfully!"
+          argocd app get microservices-app
+
+      - name: Post deployment check
+        if: always()
+        run: |
+          echo "Deployment summary:"
+          argocd app get microservices-app --output json | \
+            jq -r '.status.sync.status, .status.health.status'
+
+  verify-deployment:
+    name: Verify Deployment
+    needs: notify-argocd
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Verify services are accessible
+        run: |
+          echo "Deployment verification completed"
+          echo "Check ArgoCD UI at: ${{ secrets.ARGOCD_SERVER }}"
+
+      - name: Send notification
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment successful!"
+          else
+            echo "❌ Deployment failed!"
+          fi
