@@ -144,7 +144,7 @@ jobs:
           
           # Check if gitops directory exists, otherwise use k8s
           if [ -d "gitops" ]; then
-            cd gitops
+            cd gitops/base
           elif [ -d "k8s" ]; then
             cd k8s
           else
