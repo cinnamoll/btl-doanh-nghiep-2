@@ -219,7 +219,7 @@ jobs:
           
           argocd login ${{ secrets.ARGOCD_SERVER }} \
             --username admin \
-            --password ${{ secrets.ARGOCD_AUTH_TOKEN }} \
+            --password HelloWorld23 \
           
           # Get current app status
           echo "Current application status:"
@@ -270,3 +270,5 @@ jobs:
           else
             echo "❌ Deployment failed!"
           fi
+
+
