@@ -1,120 +1,118 @@
-name: Deploy to GKE with Public Images
+name: Build and Deploy with ArgoCD
 
 on:
   push:
-    branches:
-      - main # Trigger on push to the master branch
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GAR_LOCATION: asia-southeast1
+  REPOSITORY: microservices-repo
 
 jobs:
-  build:
+  build-and-push:
+    name: Build and Push Images
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
-      # Checkout code
-      - name: Checkout code
-        uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      # Authenticate to GCP with Service Account
-      - name: Authenticate to GCP with Service Account
-        uses: google-github-actions/auth@v1
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      # Setup Google Cloud SDK
-      - name: Set up gcloud CLI
-        uses: google-github-actions/setup-gcloud@v1
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.GAR_LOCATION }}-docker.pkg.dev
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
-          project_id: 'silicon-airlock-456802-p4'
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
 
-      # Connect to GKE Cluster
-      - name: Connect to GKE Cluster
-        run: |
-          gcloud container clusters get-credentials microservices-cluster --zone asia-southeast1-a
+      - name: Build with Maven
+        run: mvn clean package -DskipTests -T 1C
 
-      # Install gke-gcloud-auth-plugin
-      - name: Install gke-gcloud-auth-plugin
-        run: |
-          gcloud components install gke-gcloud-auth-plugin --quiet || true
-
-      # Build JAR for api-gateway
-      - name: Build JAR for api-gateway
-        run: |
-          cd api-gateway
-          mvn -B -DskipTests package
-          cd ..
-
-      - name: Build JAR for discovery-server
-        run: |
-          cd discovery-server
-          mvn -B -DskipTests package
-          cd ..
-
-      - name: Build JAR for product-service
-        run: |
-          cd product-service
-          mvn -B -DskipTests package
-          cd ..
-
-      - name: Build JAR for order-service
-        run: |
-          cd order-service
-          mvn -B -DskipTests package
-          cd ..
-
-      - name: Build JAR for inventory-service
-        run: |
-          cd inventory-service
-          mvn -B -DskipTests package
-          cd ..
-
-      - name: Build JAR for notification-service
-        run: |
-          cd notification-service
-          mvn -B -DskipTests package
-          cd ..
-
-        # Authenticate Docker with Google Cloud
-      - name: Authenticate Docker
-        run: gcloud auth configure-docker asia-southeast1-docker.pkg.dev
-
-      # Build and push the Docker images for all services
       - name: Build and Push Docker Images
         run: |
-          docker build --no-cache -t asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/api-gateway:latest ./api-gateway
-          docker build --no-cache -t asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/discovery-server:latest ./discovery-server
-          docker build --no-cache -t asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/product-service:latest ./product-service
-          docker build --no-cache -t asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/order-service:latest ./order-service
-          docker build --no-cache -t asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/inventory-service:latest ./inventory-service
-          docker build --no-cache -t asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/notification-service:latest ./notification-service
+          # Get short SHA
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          
+          # Build and push each service
+          services=(discovery-server api-gateway product-service order-service inventory-service notification-service)
+          
+          for service in "${services[@]}"; do
+            echo "Building $service..."
+          
+            docker build \
+              -t ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/$service:$SHORT_SHA \
+              -t ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/$service:latest \
+              -f $service/Dockerfile \
+              $service
+          
+            echo "Pushing $service..."
+            docker push ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/$service:$SHORT_SHA
+            docker push ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/$service:latest
+          done
 
-          docker push asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/api-gateway:latest
-          docker push asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/discovery-server:latest
-          docker push asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/product-service:latest
-          docker push asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/order-service:latest
-          docker push asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/inventory-service:latest
-          docker push asia-southeast1-docker.pkg.dev/btl-ecommerce-prod-480516/microservices-repo/notification-service:latest
-
-      # Authenticate Docker with Google Cloud
-      - name: Authenticate Docker
-        run: gcloud auth configure-docker asia-southeast1-docker.pkg.dev
-
-      # Deploy manifests to GKE
-      - name: Deploy manifests to GKE
+      - name: Update K8s manifests
         run: |
-          kubectl apply -f k8s/k8s-mysql-inventory.yaml
-          kubectl apply -f k8s/k8s-mysql-order.yaml
-          kubectl apply -f k8s/k8s-keycloak.yaml
-          kubectl apply -f k8s/k8s-keycloak-mysql.yaml
-          kubectl apply -f k8s/k8s-mongo.yaml
-          kubectl apply -f k8s/k8s-api-gateway.yaml
-          kubectl rollout status deployment/api-gateway || true
-          kubectl apply -f k8s/k8s-discovery-server.yaml
-          kubectl rollout status deployment/discovery-server || true
-          kubectl apply -f k8s/k8s-product-service.yaml
-          kubectl rollout status deployment/product-service || true
-          kubectl apply -f k8s/k8s-order-service.yaml
-          kubectl rollout status deployment/order-service || true
-          kubectl apply -f k8s/k8s-inventory-service.yaml
-          kubectl rollout status deployment/inventory-service || true
-          kubectl apply -f k8s/k8s-notification-service.yaml
-          kubectl rollout status deployment/notification-service || true
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          
+          # Update image tags in k8s manifests
+          cd k8s
+          for file in *-deployment.yaml; do
+            if [[ -f "$file" ]]; then
+              # Extract service name from filename
+              service=$(echo $file | sed 's/-deployment.yaml//')
+          
+              # Update image tag
+              sed -i "s|image: .*/$service:.*|image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/$service:$SHORT_SHA|g" $file
+            fi
+          done
+
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add k8s/*.yaml
+          git diff --staged --quiet || git commit -m "Update image tags to ${{ github.sha }}"
+          git push
+
+  trigger-argocd-sync:
+    name: Trigger ArgoCD Sync
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Sync ArgoCD Application
+        run: |
+          # Install ArgoCD CLI
+          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          chmod +x argocd
+          
+          # Login to ArgoCD
+          ./argocd login ${{ secrets.ARGOCD_SERVER }} \
+            --username admin \
+            --password ${{ secrets.ARGOCD_AUTH_TOKEN }} \
+            --insecure
+          
+          # Sync application
+          ./argocd app sync microservices-app --force
+          
+          # Wait for sync
+          ./argocd app wait microservices-app --timeout 600
